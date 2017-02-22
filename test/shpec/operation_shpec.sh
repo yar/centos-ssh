@@ -551,6 +551,44 @@ describe "jdeathe/centos-ssh:latest"
 			end
 		end
 
+		it "Allows setting the user's uid and gid to values below 500"
+			local container_port_22=""
+			local user_id=""
+
+			docker_terminate_container ssh.pool-1.1.1 &> /dev/null
+
+			docker run -d \
+				--name ssh.pool-1.1.1 \
+				--env "SSH_SUDO=ALL=(ALL) NOPASSWD:ALL" \
+				--env "SSH_USER_ID=88:99" \
+				--publish ${DOCKER_PORT_MAP_TCP_22}:22 \
+				jdeathe/centos-ssh:latest &> /dev/null
+
+			container_port_22="$(
+				docker port \
+				ssh.pool-1.1.1 \
+				22/tcp
+			)"
+			container_port_22=${container_port_22##*:}
+
+			sleep ${BOOTSTRAP_BACKOFF_TIME}
+
+			user_id="$(
+				ssh -q \
+				-p ${container_port_22} \
+				-i ${TEST_DIRECTORY}/fixture/id_rsa_insecure \
+				-o StrictHostKeyChecking=no \
+				-o LogLevel=error \
+				app-admin@${DOCKER_HOSTNAME} \
+				-- printf \
+					'%s:%s\\n' \
+					"\$(id --user app-admin)" \
+					"\$(id --group app-admin)"
+			)"
+
+			assert equal "${user_id}" "88:99"
+		end
+
 		it "Allows configuration of the user's shell."
 			local container_port_22=""
 			local user_shell=""
